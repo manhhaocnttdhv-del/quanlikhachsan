@@ -445,10 +445,10 @@ class CheckoutController extends Controller
                                 'notes' => "Hoàn tiền do checkout sớm {$daysEarly} ngày. Số ngày thực tế: {$actualNights} đêm. Tiền phòng thực tế: " . number_format($actualRoomPrice) . " VNĐ.",
                             ]);
                             
-                            // Cập nhật payment status thành refunded (một phần)
+                            // Không đổi payment_status thành 'refunded' - giữ nguyên 'completed'
+                            // Chỉ cập nhật notes để ghi nhận thông tin checkout sớm
                             $booking->payment->update([
-                                'payment_status' => 'refunded',
-                                'notes' => ($booking->payment->notes ?? '') . "\n[CHECKOUT SỚM] Đã checkout sớm {$daysEarly} ngày. Số tiền cần hoàn: " . number_format($refundAmount) . " VNĐ.",
+                                'notes' => ($booking->payment->notes ?? '') . "\n[CHECKOUT SỚM] Đã checkout sớm {$daysEarly} ngày. Số tiền cần hoàn: " . number_format($refundAmount) . " VNĐ. Đã tạo yêu cầu hoàn tiền.",
                             ]);
                         }
                     } else {

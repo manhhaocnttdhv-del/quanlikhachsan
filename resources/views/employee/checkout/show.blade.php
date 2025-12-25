@@ -220,7 +220,16 @@
                 </h5>
             </div>
             <div class="card-body">
-                @if($booking->payment && $booking->payment->payment_status == 'completed')
+                @php
+                    $paymentCompleted = $booking->payment && ($booking->payment->payment_status == 'completed' || $booking->payment->payment_status == 'refunded');
+                    $hasRefundRequest = false;
+                    $refundRequest = null;
+                    if ($booking->payment) {
+                        $refundRequest = \App\Models\RefundRequest::where('payment_id', $booking->payment->id)->latest()->first();
+                        $hasRefundRequest = $refundRequest !== null;
+                    }
+                @endphp
+                @if($paymentCompleted)
                     <div class="text-center mb-3">
                         <i class="fas fa-check-circle fa-3x text-success mb-2"></i>
                         <h4 class="text-success">Đã thanh toán</h4>
@@ -298,6 +307,36 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    @endif
+                    @php
+                        $hasRefundRequest = false;
+                        $refundRequest = null;
+                        if ($booking->payment) {
+                            $refundRequest = \App\Models\RefundRequest::where('payment_id', $booking->payment->id)->latest()->first();
+                            $hasRefundRequest = $refundRequest !== null;
+                        }
+                    @endphp
+                    @if($hasRefundRequest && $refundRequest)
+                    <hr>
+                    <div class="alert alert-info mb-2">
+                        <i class="fas fa-info-circle"></i> 
+                        <strong>Yêu cầu hoàn tiền</strong>
+                        <p class="mb-1 mt-2 small">
+                            Số tiền cần hoàn: <strong>{{ number_format((float)$refundRequest->refund_amount) }} VNĐ</strong>
+                        </p>
+                        <p class="mb-0 small">
+                            Trạng thái: 
+                            @if($refundRequest->status == 'pending')
+                                <span class="badge bg-warning">Đang chờ xử lý</span>
+                            @elseif($refundRequest->status == 'approved')
+                                <span class="badge bg-info">Đã duyệt</span>
+                            @elseif($refundRequest->status == 'completed')
+                                <span class="badge bg-success">Đã hoàn tiền</span>
+                            @elseif($refundRequest->status == 'rejected')
+                                <span class="badge bg-danger">Đã từ chối</span>
+                            @endif
+                        </p>
                     </div>
                     @endif
                     @if($booking->payment->notes)
