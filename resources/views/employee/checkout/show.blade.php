@@ -627,29 +627,69 @@
                         <i class="fas fa-plus"></i> Thêm dịch vụ phát sinh
                     </button>
 
-                    {{-- Checkbox tính phí checkout sớm --}}
+                    {{-- Thông báo checkout sớm và hoàn tiền --}}
                     @if($isEarlyCheckout)
                         <hr>
-                        <div class="alert alert-warning">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" 
-                                       name="calculate_early_checkout_penalty" 
-                                       value="1" 
-                                       id="calculateEarlyCheckoutPenalty">
-                                <label class="form-check-label" for="calculateEarlyCheckoutPenalty">
+                        <div class="alert alert-info">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-info-circle fa-2x me-3 text-info"></i>
+                                <div class="flex-grow-1">
                                     <strong>
-                                        <i class="fas fa-exclamation-triangle"></i> 
-                                        Tính phí checkout sớm ({{ $daysEarly }} ngày)
+                                        <i class="fas fa-calendar-times"></i> 
+                                        Checkout sớm {{ $daysEarly }} ngày
                                     </strong>
-                                </label>
+                                    <p class="mb-1 mt-2">
+                                        Khách trả phòng sớm {{ $daysEarly }} ngày so với dự kiến.
+                                    </p>
+                                    @if($originalPaymentCompleted && $refundAmount > 0)
+                                        {{-- Đã thanh toán: hiển thị thông tin hoàn tiền --}}
+                                        <div class="bg-light p-3 rounded mt-2">
+                                            <p class="mb-1"><strong>Thông tin tính toán:</strong></p>
+                                            <ul class="mb-1 small">
+                                                <li>Số ngày thực tế đã ở: <strong>{{ $actualNights }} đêm</strong></li>
+                                                <li>Tiền phòng thực tế: <strong>{{ number_format($actualRoomPrice) }} VNĐ</strong></li>
+                                                <li>Tiền đã thanh toán: <strong>{{ number_format($booking->payment->amount) }} VNĐ</strong></li>
+                                            </ul>
+                                            <p class="mb-0">
+                                                <strong class="text-success">
+                                                    <i class="fas fa-money-bill-wave"></i> 
+                                                    Số tiền cần hoàn: {{ number_format($refundAmount) }} VNĐ
+                                                </strong>
+                                            </p>
+                                            <small class="text-muted d-block mt-2">
+                                                <i class="fas fa-info-circle"></i> 
+                                                Hệ thống sẽ tự động tạo yêu cầu hoàn tiền sau khi checkout.
+                                            </small>
+                                        </div>
+                                    @elseif($originalPaymentCompleted && $refundAmount <= 0)
+                                        {{-- Đã thanh toán nhưng không có tiền hoàn (tiền phòng thực tế >= tiền đã trả) --}}
+                                        <div class="bg-light p-3 rounded mt-2">
+                                            <p class="mb-0">
+                                                <i class="fas fa-check-circle text-success"></i> 
+                                                Tiền phòng thực tế ({{ number_format($actualRoomPrice) }} VNĐ) đã được thanh toán đầy đủ. Không cần hoàn tiền.
+                                            </p>
+                                        </div>
+                                    @else
+                                        {{-- Chưa thanh toán: tính lại tiền phòng --}}
+                                        <div class="bg-light p-3 rounded mt-2">
+                                            <p class="mb-1"><strong>Thông tin tính toán:</strong></p>
+                                            <ul class="mb-1 small">
+                                                <li>Số ngày thực tế đã ở: <strong>{{ $actualNights }} đêm</strong></li>
+                                            </ul>
+                                            <p class="mb-0">
+                                                <strong class="text-primary">
+                                                    <i class="fas fa-calculator"></i> 
+                                                    Tiền phòng sẽ được tính lại: {{ number_format($actualRoomPrice) }} VNĐ
+                                                </strong>
+                                            </p>
+                                        </div>
+                                    @endif
+                                    <small class="text-muted d-block mt-2">
+                                        <i class="fas fa-calendar-alt"></i> 
+                                        Ngày checkout sẽ được cập nhật về ngày hôm nay ({{ \Carbon\Carbon::today()->format('d/m/Y') }})
+                                    </small>
+                                </div>
                             </div>
-                            <small class="text-muted d-block mt-2">
-                                Khách trả phòng sớm {{ $daysEarly }} ngày so với dự kiến. 
-                                Hệ thống sẽ tính phí {{ $daysEarly }} ngày × 50% giá phòng/ngày = 
-                                <strong id="earlyCheckoutPenaltyAmount">
-                                    {{ number_format($daysEarly * $booking->room->price_per_night * 0.5) }} VNĐ
-                                </strong>
-                            </small>
                         </div>
                     @endif
 

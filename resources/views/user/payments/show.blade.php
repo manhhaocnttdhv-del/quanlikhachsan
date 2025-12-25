@@ -296,24 +296,77 @@
                                 @else
                                     @php
                                         $refundRequest = \App\Models\RefundRequest::where('payment_id', $payment->id)
-                                            ->whereIn('status', ['pending', 'approved'])
+                                            ->latest()
                                             ->first();
                                     @endphp
-                                    <div class="alert alert-success mt-3">
-                                        <i class="fas fa-check-circle"></i> 
-                                        <strong>Đã gửi yêu cầu hoàn tiền!</strong>
-                                        <p class="mb-0 mt-2">
-                                            Trạng thái: 
-                                            @if($refundRequest->status === 'pending')
-                                                <span class="badge bg-warning">Đang chờ xử lý</span>
-                                            @elseif($refundRequest->status === 'approved')
-                                                <span class="badge bg-info">Đã duyệt</span>
-                                            @endif
-                                        </p>
-                                        <p class="mb-0 mt-1">
-                                            Số tiền hoàn: <strong>{{ number_format($refundRequest->refund_amount) }} VNĐ</strong>
-                                        </p>
-                                    </div>
+                                    @if($refundRequest)
+                                        @if($refundRequest->status === 'completed')
+                                            {{-- Đã hoàn tiền thành công --}}
+                                            <div class="alert alert-success mt-3">
+                                                <i class="fas fa-check-circle"></i> 
+                                                <strong>Đã hoàn tiền thành công!</strong>
+                                                <p class="mb-1 mt-2">
+                                                    Yêu cầu hoàn tiền của bạn đã được xử lý thành công.
+                                                </p>
+                                                <p class="mb-1">
+                                                    Số tiền đã hoàn: <strong>{{ number_format((float)$refundRequest->refund_amount) }} VNĐ</strong>
+                                                </p>
+                                                <p class="mb-1">
+                                                    <strong>Thời gian nhận tiền: 3-5 ngày làm việc.</strong>
+                                                </p>
+                                                @if($refundRequest->admin_notes)
+                                                    <small class="text-muted d-block mt-2">
+                                                        <i class="fas fa-sticky-note me-1"></i>
+                                                        <strong>Ghi chú:</strong> {{ $refundRequest->admin_notes }}
+                                                    </small>
+                                                @endif
+                                            </div>
+                                        @elseif($refundRequest->status === 'approved')
+                                            {{-- Đã duyệt, đang chờ hoàn tiền --}}
+                                            <div class="alert alert-info mt-3">
+                                                <i class="fas fa-check-circle"></i> 
+                                                <strong>Yêu cầu hoàn tiền đã được duyệt</strong>
+                                                <p class="mb-1 mt-2">
+                                                    Yêu cầu hoàn tiền của bạn đã được duyệt. Đang chờ xử lý hoàn tiền.
+                                                </p>
+                                                <p class="mb-1">
+                                                    Số tiền sẽ được hoàn: <strong>{{ number_format((float)$refundRequest->refund_amount) }} VNĐ</strong>
+                                                </p>
+                                                @if($refundRequest->admin_notes)
+                                                    <small class="text-muted d-block mt-2">
+                                                        <i class="fas fa-sticky-note me-1"></i>
+                                                        <strong>Ghi chú:</strong> {{ $refundRequest->admin_notes }}
+                                                    </small>
+                                                @endif
+                                            </div>
+                                        @elseif($refundRequest->status === 'pending')
+                                            {{-- Đang chờ xử lý --}}
+                                            <div class="alert alert-warning mt-3">
+                                                <i class="fas fa-clock"></i> 
+                                                <strong>Yêu cầu hoàn tiền đang chờ xử lý</strong>
+                                                <p class="mb-1 mt-2">
+                                                    Yêu cầu hoàn tiền của bạn đang được xem xét. Vui lòng đợi admin xử lý.
+                                                </p>
+                                                <p class="mb-1">
+                                                    Số tiền yêu cầu hoàn: <strong>{{ number_format((float)$refundRequest->refund_amount) }} VNĐ</strong>
+                                                </p>
+                                            </div>
+                                        @elseif($refundRequest->status === 'rejected')
+                                            {{-- Bị từ chối --}}
+                                            <div class="alert alert-danger mt-3">
+                                                <i class="fas fa-times-circle"></i> 
+                                                <strong>Yêu cầu hoàn tiền bị từ chối</strong>
+                                                <p class="mb-1 mt-2">
+                                                    Yêu cầu hoàn tiền của bạn đã bị từ chối.
+                                                </p>
+                                                @if($refundRequest->admin_notes)
+                                                    <p class="mb-1">
+                                                        <strong>Lý do:</strong> {{ $refundRequest->admin_notes }}
+                                                    </p>
+                                                @endif
+                                            </div>
+                                        @endif
+                                    @endif
                                 @endif
                             @endif
                         @endif

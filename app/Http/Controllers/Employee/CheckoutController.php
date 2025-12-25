@@ -223,7 +223,36 @@ class CheckoutController extends Controller
                 ->with('error', 'Booking này đã quá hạn (check-in và checkout đều trong quá khứ).');
         }
 
-        return view('employee.checkout.show', compact('booking'));
+        // Tính toán thông tin checkout sớm để hiển thị
+        $isEarlyCheckout = false;
+        $daysEarly = 0;
+        $actualNights = 0;
+        $refundAmount = 0;
+        $actualRoomPrice = 0;
+        $originalPaymentCompleted = $booking->payment && $booking->payment->payment_status === 'completed';
+        
+        if ($booking->status !== 'completed' && $checkOutDate->gt($today)) {
+            $isEarlyCheckout = true;
+            $daysEarly = $today->diffInDays($checkOutDate);
+            
+            if ($daysEarly > 0 && $booking->room) {
+                // Tính số ngày thực tế đã ở
+                $actualNights = $checkInDate->diffInDays($today);
+                if ($actualNights == 0) {
+                    $actualNights = 1;
+                }
+                
+                $pricePerNight = $booking->room->price_per_night;
+                $actualRoomPrice = $actualNights * $pricePerNight;
+                
+                // Nếu đã thanh toán, tính số tiền cần hoàn
+                if ($originalPaymentCompleted && $booking->payment) {
+                    $refundAmount = $booking->payment->amount - $actualRoomPrice;
+                }
+            }
+        }
+        
+        return view('employee.checkout.show', compact('booking', 'isEarlyCheckout', 'daysEarly', 'actualNights', 'refundAmount', 'actualRoomPrice', 'originalPaymentCompleted'));
     }
 
     /**
@@ -237,13 +266,16 @@ class CheckoutController extends Controller
             abort(403, 'Bạn không có quyền thực hiện thao tác này.');
         }
 
-        // Kiểm tra ca làm việc
-        $todayShift = $admin->shifts()
-            ->where('shift_date', Carbon::today())
-            ->whereIn('status', ['scheduled', 'active'])
+        // Kiểm tra ca làm việc - tìm ca active (không giới hạn theo ngày)
+        // Ca làm việc không bị giới hạn - nếu status = 'active' thì luôn coi là active
+        $activeShift = $admin->shifts()
+            ->where('status', 'active')
+            ->orderBy('shift_date', 'desc')
+            ->orderBy('start_time', 'desc')
             ->first();
 
-        if (!$todayShift || !$todayShift->isActive()) {
+        // Kiểm tra nếu có ca và ca đang active
+        if (!$activeShift) {
             return redirect()->route('admin.employee.checkout.show', $id)
                 ->with('error', 'Bạn cần có ca làm việc đang hoạt động để thực hiện check-in.');
         }
@@ -289,8 +321,8 @@ class CheckoutController extends Controller
             }
 
             // Gán shift_id nếu chưa có
-            if (!$booking->shift_id) {
-                $booking->update(['shift_id' => $todayShift->id]);
+            if (!$booking->shift_id && $activeShift) {
+                $booking->update(['shift_id' => $activeShift->id]);
             }
 
             \DB::commit();
@@ -315,13 +347,16 @@ class CheckoutController extends Controller
             abort(403, 'Bạn không có quyền thực hiện thao tác này.');
         }
 
-        // Kiểm tra ca làm việc
-        $todayShift = $admin->shifts()
-            ->where('shift_date', Carbon::today())
-            ->whereIn('status', ['scheduled', 'active'])
+        // Kiểm tra ca làm việc - tìm ca active (không giới hạn theo ngày)
+        // Ca làm việc không bị giới hạn - nếu status = 'active' thì luôn coi là active
+        $activeShift = $admin->shifts()
+            ->where('status', 'active')
+            ->orderBy('shift_date', 'desc')
+            ->orderBy('start_time', 'desc')
             ->first();
 
-        if (!$todayShift || !$todayShift->isActive()) {
+        // Kiểm tra nếu có ca và ca đang active
+        if (!$activeShift) {
             return redirect()->route('admin.employee.checkout.show', $id)
                 ->with('error', 'Bạn cần có ca làm việc đang hoạt động để thực hiện checkout.');
         }
@@ -359,31 +394,70 @@ class CheckoutController extends Controller
 
             // Lưu ngày checkout dự kiến ban đầu để so sánh sau
             $originalCheckoutDate = Carbon::parse($booking->check_out_date)->startOfDay();
-            
-            // Tính tiền ngày dư nếu checkout sớm
+            $checkInDate = Carbon::parse($booking->check_in_date)->startOfDay();
             $today = Carbon::today()->startOfDay();
             $checkOutDate = $originalCheckoutDate;
             
-            if ($checkOutDate->gt($today) && isset($validated['calculate_early_checkout_penalty']) && $validated['calculate_early_checkout_penalty']) {
-                // Checkout sớm: tính tiền cho số ngày dư
+            // Tính số ngày thực tế đã ở (từ check_in_date đến ngày checkout hôm nay)
+            $actualNights = $checkInDate->diffInDays($today);
+            if ($actualNights == 0) {
+                $actualNights = 1; // Ít nhất 1 đêm
+            }
+            
+            // Tính số ngày dư nếu checkout sớm
+            $daysEarly = 0;
+            $refundAmount = 0;
+            $originalPaymentCompleted = $booking->payment && $booking->payment->payment_status === 'completed';
+            
+            if ($checkOutDate->gt($today)) {
+                // Checkout sớm
                 $daysEarly = $today->diffInDays($checkOutDate);
+                
                 if ($daysEarly > 0 && $booking->room) {
-                    // Tính tiền cho số ngày dư (có thể tính 50% hoặc 100% tùy chính sách)
-                    $penaltyRate = 0.5; // 50% giá phòng cho mỗi ngày dư (có thể config)
                     $pricePerNight = $booking->room->price_per_night;
-                    $earlyCheckoutPenalty = $daysEarly * $pricePerNight * $penaltyRate;
                     
-                    // Lưu phí checkout sớm như một dịch vụ phát sinh
-                    BookingAdditionalCharge::create([
-                        'booking_id' => $booking->id,
-                        'service_name' => 'Phí checkout sớm',
-                        'quantity' => $daysEarly,
-                        'unit_price' => $pricePerNight * $penaltyRate,
-                        'total_price' => $earlyCheckoutPenalty,
-                        'notes' => "Checkout sớm {$daysEarly} ngày (tính " . ($penaltyRate * 100) . "% giá phòng/ngày)",
-                    ]);
-                    
-                    $totalAdditionalCharges += $earlyCheckoutPenalty;
+                    // Nếu đã thanh toán tiền phòng: tính lại tiền phòng theo số ngày thực tế và hoàn tiền cho số ngày dư
+                    if ($originalPaymentCompleted && $booking->payment) {
+                        // Tính tiền phòng thực tế (theo số ngày đã ở)
+                        $actualRoomPrice = $actualNights * $pricePerNight;
+                        
+                        // Tính số tiền đã trả
+                        $paidAmount = $booking->payment->amount;
+                        
+                        // Tính số tiền cần hoàn = tiền đã trả - tiền phòng thực tế
+                        $refundAmount = $paidAmount - $actualRoomPrice;
+                        
+                        // Cập nhật total_price của booking theo số ngày thực tế
+                        $booking->update([
+                            'total_price' => $actualRoomPrice
+                        ]);
+                        
+                        // Nếu có tiền cần hoàn, tạo refund request
+                        if ($refundAmount > 0) {
+                            // Tạo refund request tự động
+                            \App\Models\RefundRequest::create([
+                                'payment_id' => $booking->payment->id,
+                                'booking_id' => $booking->id,
+                                'user_id' => $booking->user_id,
+                                'refund_amount' => $refundAmount,
+                                'refund_method' => 'bank_transfer', // Mặc định, nhân viên sẽ cập nhật sau
+                                'status' => 'pending',
+                                'notes' => "Hoàn tiền do checkout sớm {$daysEarly} ngày. Số ngày thực tế: {$actualNights} đêm. Tiền phòng thực tế: " . number_format($actualRoomPrice) . " VNĐ.",
+                            ]);
+                            
+                            // Cập nhật payment status thành refunded (một phần)
+                            $booking->payment->update([
+                                'payment_status' => 'refunded',
+                                'notes' => ($booking->payment->notes ?? '') . "\n[CHECKOUT SỚM] Đã checkout sớm {$daysEarly} ngày. Số tiền cần hoàn: " . number_format($refundAmount) . " VNĐ.",
+                            ]);
+                        }
+                    } else {
+                        // Nếu chưa thanh toán: tính lại tiền phòng theo số ngày thực tế
+                        $actualRoomPrice = $actualNights * $pricePerNight;
+                        $booking->update([
+                            'total_price' => $actualRoomPrice
+                        ]);
+                    }
                 }
             }
 
@@ -469,8 +543,8 @@ class CheckoutController extends Controller
             }
 
             // Gán shift_id nếu chưa có
-            if (!$booking->shift_id) {
-                $booking->update(['shift_id' => $todayShift->id]);
+            if (!$booking->shift_id && $activeShift) {
+                $booking->update(['shift_id' => $activeShift->id]);
             }
 
             DB::commit();
@@ -479,8 +553,15 @@ class CheckoutController extends Controller
             
             // Thông báo nếu checkout sớm hoặc muộn
             if ($actualCheckoutDate->lt($originalCheckoutDate)) {
-                $daysEarly = $actualCheckoutDate->diffInDays($originalCheckoutDate);
-                $message .= " (Checkout sớm {$daysEarly} ngày so với dự kiến - Ngày checkout đã được cập nhật)";
+                $daysEarlyMsg = $actualCheckoutDate->diffInDays($originalCheckoutDate);
+                $message .= " (Checkout sớm {$daysEarlyMsg} ngày so với dự kiến - Ngày checkout đã được cập nhật)";
+                
+                // Thông báo về hoàn tiền nếu có
+                if ($refundAmount > 0) {
+                    $message .= ". Đã tạo yêu cầu hoàn tiền: " . number_format($refundAmount) . " VNĐ.";
+                } elseif ($originalPaymentCompleted) {
+                    $message .= ". Tiền phòng đã được tính lại theo số ngày thực tế.";
+                }
             } elseif ($actualCheckoutDate->gt($originalCheckoutDate)) {
                 $daysLate = $originalCheckoutDate->diffInDays($actualCheckoutDate);
                 $message .= " (Checkout muộn {$daysLate} ngày so với dự kiến - Ngày checkout đã được cập nhật)";

@@ -13,37 +13,115 @@
     </nav>
 
     <!-- Thông báo hoàn tiền nổi bật -->
-    @if($booking->payment && $booking->payment->payment_status == 'refunded')
-        <div class="alert alert-success border-success shadow-sm mb-4">
-            <div class="d-flex align-items-center">
-                <div class="flex-shrink-0">
-                    <i class="fas fa-check-circle fa-3x text-success"></i>
-                </div>
-                <div class="flex-grow-1 ms-3">
-                    <h5 class="alert-heading mb-2">
-                        <i class="fas fa-money-bill-wave me-2"></i>Hoàn tiền thành công!
-                    </h5>
-                    <p class="mb-2">
-                        Yêu cầu hoàn tiền của bạn đã được xử lý thành công.
-                    </p>
-                    <p class="mb-1">
-                        @if($booking->payment->payment_method == 'vnpay')
-                            <strong>Tiền sẽ được hoàn về tài khoản VNPay trong vòng 3-5 ngày làm việc.</strong>
-                        @elseif($booking->payment->payment_method == 'cash')
-                            <strong>Vui lòng liên hệ khách sạn để nhận hoàn tiền.</strong>
-                        @else
-                            <strong>Tiền sẽ được hoàn về tài khoản trong vòng 3-5 ngày làm việc.</strong>
+    @php
+        $refundRequest = null;
+        if ($booking->payment) {
+            $refundRequest = \App\Models\RefundRequest::where('payment_id', $booking->payment->id)->first();
+        }
+    @endphp
+    
+    @if($booking->payment && $booking->payment->payment_status == 'refunded' && $refundRequest)
+        @if($refundRequest->status == 'completed')
+            {{-- Đã hoàn tiền thành công --}}
+            <div class="alert alert-success border-success shadow-sm mb-4">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-check-circle fa-3x text-success"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h5 class="alert-heading mb-2">
+                            <i class="fas fa-money-bill-wave me-2"></i>Hoàn tiền thành công!
+                        </h5>
+                        <p class="mb-2">
+                            Yêu cầu hoàn tiền của bạn đã được xử lý thành công.
+                        </p>
+                        <p class="mb-1">
+                            @if($booking->payment->payment_method == 'vnpay')
+                                <strong>Tiền sẽ được hoàn về tài khoản VNPay trong vòng 3-5 ngày làm việc.</strong>
+                            @elseif($booking->payment->payment_method == 'cash')
+                                <strong>Vui lòng liên hệ khách sạn để nhận hoàn tiền.</strong>
+                            @else
+                                <strong>Tiền sẽ được hoàn về tài khoản trong vòng 3-5 ngày làm việc.</strong>
+                            @endif
+                        </p>
+                        @if($refundRequest->admin_notes)
+                            <small class="text-muted d-block mt-2">
+                                <i class="fas fa-sticky-note me-1"></i>
+                                <strong>Ghi chú:</strong> {{ $refundRequest->admin_notes }}
+                            </small>
                         @endif
-                    </p>
-                    @if($booking->payment->notes)
-                        <small class="text-muted d-block mt-2">
-                            <i class="fas fa-sticky-note me-1"></i>
-                            <strong>Ghi chú:</strong> {{ $booking->payment->notes }}
-                        </small>
-                    @endif
+                    </div>
                 </div>
             </div>
-        </div>
+        @elseif($refundRequest->status == 'approved')
+            {{-- Đã duyệt, đang chờ hoàn tiền --}}
+            <div class="alert alert-info border-info shadow-sm mb-4">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-info-circle fa-3x text-info"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h5 class="alert-heading mb-2">
+                            <i class="fas fa-check-circle me-2"></i>Yêu cầu hoàn tiền đã được duyệt
+                        </h5>
+                        <p class="mb-2">
+                            Yêu cầu hoàn tiền của bạn đã được duyệt. Đang chờ xử lý hoàn tiền.
+                        </p>
+                        <p class="mb-1">
+                            <strong>Số tiền sẽ được hoàn: {{ number_format((float)$refundRequest->refund_amount) }} VNĐ</strong>
+                        </p>
+                        @if($refundRequest->admin_notes)
+                            <small class="text-muted d-block mt-2">
+                                <i class="fas fa-sticky-note me-1"></i>
+                                <strong>Ghi chú:</strong> {{ $refundRequest->admin_notes }}
+                            </small>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        @elseif($refundRequest->status == 'pending')
+            {{-- Đang chờ xử lý --}}
+            <div class="alert alert-warning border-warning shadow-sm mb-4">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-clock fa-3x text-warning"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h5 class="alert-heading mb-2">
+                            <i class="fas fa-hourglass-half me-2"></i>Yêu cầu hoàn tiền đang chờ xử lý
+                        </h5>
+                        <p class="mb-2">
+                            Yêu cầu hoàn tiền của bạn đang được xem xét. Vui lòng đợi admin xử lý.
+                        </p>
+                        <p class="mb-1">
+                            <strong>Số tiền yêu cầu hoàn: {{ number_format((float)$refundRequest->refund_amount) }} VNĐ</strong>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        @elseif($refundRequest->status == 'rejected')
+            {{-- Bị từ chối --}}
+            <div class="alert alert-danger border-danger shadow-sm mb-4">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-times-circle fa-3x text-danger"></i>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h5 class="alert-heading mb-2">
+                            <i class="fas fa-ban me-2"></i>Yêu cầu hoàn tiền bị từ chối
+                        </h5>
+                        <p class="mb-2">
+                            Yêu cầu hoàn tiền của bạn đã bị từ chối.
+                        </p>
+                        @if($refundRequest->admin_notes)
+                            <p class="mb-1">
+                                <strong>Lý do:</strong> {{ $refundRequest->admin_notes }}
+                            </p>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        @endif
     @endif
 
     <div class="row">
@@ -495,36 +573,104 @@
                         @endif
 
                         @if($booking->payment->payment_status == 'refunded')
-                            <div class="alert alert-success border-success mt-3 mb-0 shadow-sm">
-                                <div class="d-flex align-items-center">
-                                    <i class="fas fa-check-circle fa-2x me-3 text-success"></i>
-                                    <div>
-                                        <h6 class="alert-heading mb-2">
-                                            <i class="fas fa-money-bill-wave me-2"></i>Đã hoàn tiền thành công!
-                                        </h6>
-                                        <p class="mb-1">
-                                            @if($booking->payment->payment_method == 'vnpay')
-                                                <i class="fas fa-info-circle me-2"></i>
-                                                Tiền đã được hoàn về tài khoản VNPay của bạn. 
-                                                <strong>Thời gian nhận tiền: 3-5 ngày làm việc.</strong>
-                                            @elseif($booking->payment->payment_method == 'cash')
-                                                <i class="fas fa-info-circle me-2"></i>
-                                                Vui lòng liên hệ khách sạn để nhận hoàn tiền.
-                                            @else
-                                                <i class="fas fa-info-circle me-2"></i>
-                                                Tiền đã được hoàn về tài khoản của bạn. 
-                                                <strong>Thời gian nhận tiền: 3-5 ngày làm việc.</strong>
+                            @php
+                                $refundRequestDetail = \App\Models\RefundRequest::where('payment_id', $booking->payment->id)->latest()->first();
+                            @endphp
+                            @if($refundRequestDetail && $refundRequestDetail->status == 'completed')
+                                {{-- Đã hoàn tiền thành công --}}
+                                <div class="alert alert-success border-success mt-3 mb-0 shadow-sm">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-check-circle fa-2x me-3 text-success"></i>
+                                        <div>
+                                            <h6 class="alert-heading mb-2">
+                                                <i class="fas fa-money-bill-wave me-2"></i>Đã hoàn tiền thành công!
+                                            </h6>
+                                            <p class="mb-1">
+                                                @if($booking->payment->payment_method == 'vnpay')
+                                                    <i class="fas fa-info-circle me-2"></i>
+                                                    Tiền đã được hoàn về tài khoản VNPay của bạn. 
+                                                    <strong>Thời gian nhận tiền: 3-5 ngày làm việc.</strong>
+                                                @elseif($booking->payment->payment_method == 'cash')
+                                                    <i class="fas fa-info-circle me-2"></i>
+                                                    Vui lòng liên hệ khách sạn để nhận hoàn tiền.
+                                                @else
+                                                    <i class="fas fa-info-circle me-2"></i>
+                                                    Tiền đã được hoàn về tài khoản của bạn. 
+                                                    <strong>Thời gian nhận tiền: 3-5 ngày làm việc.</strong>
+                                                @endif
+                                            </p>
+                                            @if($refundRequestDetail->admin_notes)
+                                                <small class="text-muted d-block mt-2">
+                                                    <i class="fas fa-sticky-note me-1"></i>
+                                                    <strong>Ghi chú:</strong> {{ $refundRequestDetail->admin_notes }}
+                                                </small>
                                             @endif
-                                        </p>
-                                        @if($booking->payment->notes)
-                                            <small class="text-muted d-block mt-2">
-                                                <i class="fas fa-sticky-note me-1"></i>
-                                                Ghi chú: {{ $booking->payment->notes }}
-                                            </small>
-                                        @endif
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            @elseif($refundRequestDetail && $refundRequestDetail->status == 'approved')
+                                {{-- Đã duyệt, đang chờ hoàn tiền --}}
+                                <div class="alert alert-info border-info mt-3 mb-0 shadow-sm">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-info-circle fa-2x me-3 text-info"></i>
+                                        <div>
+                                            <h6 class="alert-heading mb-2">
+                                                <i class="fas fa-check-circle me-2"></i>Yêu cầu hoàn tiền đã được duyệt
+                                            </h6>
+                                            <p class="mb-1">
+                                                Yêu cầu hoàn tiền của bạn đã được duyệt. Đang chờ xử lý hoàn tiền.
+                                            </p>
+                                            <p class="mb-1">
+                                                <strong>Số tiền sẽ được hoàn: {{ number_format((float)$refundRequestDetail->refund_amount) }} VNĐ</strong>
+                                            </p>
+                                            @if($refundRequestDetail->admin_notes)
+                                                <small class="text-muted d-block mt-2">
+                                                    <i class="fas fa-sticky-note me-1"></i>
+                                                    <strong>Ghi chú:</strong> {{ $refundRequestDetail->admin_notes }}
+                                                </small>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
+                            @elseif($refundRequestDetail && $refundRequestDetail->status == 'pending')
+                                {{-- Đang chờ xử lý --}}
+                                <div class="alert alert-warning border-warning mt-3 mb-0 shadow-sm">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-clock fa-2x me-3 text-warning"></i>
+                                        <div>
+                                            <h6 class="alert-heading mb-2">
+                                                <i class="fas fa-hourglass-half me-2"></i>Yêu cầu hoàn tiền đang chờ xử lý
+                                            </h6>
+                                            <p class="mb-1">
+                                                Yêu cầu hoàn tiền của bạn đang được xem xét. Vui lòng đợi admin xử lý.
+                                            </p>
+                                            <p class="mb-1">
+                                                <strong>Số tiền yêu cầu hoàn: {{ number_format((float)$refundRequestDetail->refund_amount) }} VNĐ</strong>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            @elseif($refundRequestDetail && $refundRequestDetail->status == 'rejected')
+                                {{-- Bị từ chối --}}
+                                <div class="alert alert-danger border-danger mt-3 mb-0 shadow-sm">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-times-circle fa-2x me-3 text-danger"></i>
+                                        <div>
+                                            <h6 class="alert-heading mb-2">
+                                                <i class="fas fa-ban me-2"></i>Yêu cầu hoàn tiền bị từ chối
+                                            </h6>
+                                            <p class="mb-1">
+                                                Yêu cầu hoàn tiền của bạn đã bị từ chối.
+                                            </p>
+                                            @if($refundRequestDetail->admin_notes)
+                                                <p class="mb-1">
+                                                    <strong>Lý do:</strong> {{ $refundRequestDetail->admin_notes }}
+                                                </p>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
+                            @endif
                         @endif
 
                         @if($booking->status !== 'cancelled')

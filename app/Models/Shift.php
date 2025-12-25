@@ -70,18 +70,12 @@ class Shift extends Model
 
     /**
      * Kiểm tra xem ca có đang diễn ra không
+     * Ca làm việc không bị giới hạn - nếu status = 'active' thì luôn coi là active
      */
     public function isActive(): bool
     {
-        if ($this->status !== 'active') {
-            return false;
-        }
-
-        $now = Carbon::now();
-        $shiftDateTime = Carbon::parse($this->shift_date->format('Y-m-d') . ' ' . $this->start_time);
-        $endDateTime = Carbon::parse($this->shift_date->format('Y-m-d') . ' ' . $this->end_time);
-
-        return $now >= $shiftDateTime && $now <= $endDateTime;
+        // Nếu status = 'active' thì luôn coi là active, không cần kiểm tra thời gian
+        return $this->status === 'active';
     }
 
     /**
